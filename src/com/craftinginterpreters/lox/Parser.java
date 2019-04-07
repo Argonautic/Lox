@@ -7,6 +7,7 @@
 
 package com.craftinginterpreters.lox;
 
+import java.util.ArrayList;
 import java.util.List;
 
 import com.craftinginterpreters.lox.Expr.Binary;
@@ -177,11 +178,30 @@ class Parser {
 		}
 	}
 	
-	Expr parse() {                
-	    try {                       
-	    	return expression();      
-	    } catch (ParseError error) {
-	    	return null;              
-	    }                           
-	 }         
+	List<Stmt> parse() {                
+	    List<Stmt> statements = new ArrayList<>();
+	    while (!isAtEnd()) {
+	    	statements.add(statement());
+	    }
+	    
+	    return statements;
+	}         
+	
+	private Stmt statement() {
+		if (match(PRINT)) return printStatement();
+		
+		return expressionStatement();
+	}
+	
+	private Stmt printStatement() {
+		Expr expr = expression();
+		consume(SEMICOLON, "Expect ';' after expression.");
+		return new Stmt.Print(expr);
+	}
+	
+	private Stmt expressionStatement() {
+		Expr expr = expression();
+		consume(SEMICOLON, "Expect ';' after expression.");
+		return new Stmt.Expression(expr);
+	}
 }    
