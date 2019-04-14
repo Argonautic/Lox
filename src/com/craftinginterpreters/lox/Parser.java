@@ -8,6 +8,7 @@
 package com.craftinginterpreters.lox;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 
 import com.craftinginterpreters.lox.Expr.Binary;
@@ -73,12 +74,58 @@ class Parser {
 	}
 	
 	private Stmt statement() {
+		if (match(FOR)) return forStatement();
 		if (match(IF)) return ifStatement();
 		if (match(PRINT)) return printStatement();
 		if (match(WHILE)) return whileStatement();
 		if (match(LEFT_BRACE)) return new Stmt.Block(block());
 		
 		return expressionStatement();
+	}
+
+	// No separate ASDT node for "for" statements since it's just sugar
+	private Stmt forStatement() {
+		consume(LEFT_PAREN, "Expect '(' after 'for'.");
+
+		// for (;;) is valid syntax
+		Stmt initializer;
+		if (match(SEMICOLON)) {
+			initializer = null;
+		} else if (match(VAR)) {
+			initializer = varDeclaration();
+		} else {
+			initializer = expressionStatement();
+		}
+
+		Expr condition = null;
+		if (!check(SEMICOLON)) {
+			condition = expression();
+		}
+		consume(SEMICOLON, "Expect ';'after loop condition.");
+
+		Expr increment = null;
+		if (!check(RIGHT_PAREN)) {
+			increment = expression();
+		}
+		consume(RIGHT_PAREN, "Expect ')'after for clauses.");
+
+		Stmt body = statement();
+
+		// If there is an increment, execute it each iteration after the main body
+		if (increment != null) {
+			body = new Stmt.Block(Arrays.asList(body, new Stmt.Expression(increment)));
+		}
+
+		// If there's no condition supplied to for loop, execute indefinitely
+		if (condition == null) condition = new Expr.Literal(true);
+		body = new Stmt.While(condition, body);
+
+		// If initializer is provided, execute that statement/expression before the body
+		if (initializer != null) {
+			body = new Stmt.Block(Arrays.asList(initializer, body));
+		}
+
+		return body;
 	}
 
 	private Stmt ifStatement() {
