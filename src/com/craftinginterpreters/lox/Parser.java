@@ -26,9 +26,82 @@ class Parser {
 		this.tokens = tokens;
 	}
 	
-	private Expr expression() {
-		return equality();
+	List<Stmt> parse() {                
+	    List<Stmt> statements = new ArrayList<>();
+	    while (!isAtEnd()) {
+	    	statements.add(declaration());
+	    }
+	    
+	    return statements;
+	}         
+	
+	// If in the middle of parsing the next statement, the parser runs into an error, it will
+	// synchronize - that is, skip over successive tokens until it gets to a statement delimiter,
+	// usually a semicolon, but also a keyword that signifies the start of a new statement, such
+	// as class, if, return, etc. Nothing is returned for the statement on which parsing failed,
+	// and parsing continues on the next statement
+	private Stmt declaration() {
+		try {
+			if (match(VAR)) return varDeclaration();
+			
+			return statement();
+		} catch (ParseError error) {
+			synchronize();
+			return null;
+		}
 	}
+	
+	private Stmt varDeclaration() {
+		Token name = consume(IDENTIFIER, "Expect variable name.");
+		
+		Expr initializer = null;
+		if (match(EQUAL)) {
+			initializer = expression();
+		}
+		
+		consume(SEMICOLON, "Expect ';' after variable declaration.");
+		return new Stmt.Var(name, initializer);
+	}
+	
+	private Stmt statement() {
+		if (match(PRINT)) return printStatement();
+		
+		return expressionStatement();
+	}
+	
+	private Stmt printStatement() {
+		Expr expr = expression();
+		consume(SEMICOLON, "Expect ';' after expression.");
+		return new Stmt.Print(expr);
+	}
+	
+	private Stmt expressionStatement() {
+		Expr expr = expression();
+		consume(SEMICOLON, "Expect ';' after expression.");
+		return new Stmt.Expression(expr);
+	}
+	
+	private Expr expression() {
+		return assignment();
+	}
+	
+	private Expr assignment() {                                   
+		Expr expr = equality();
+
+		if (match(EQUAL)) {                                         
+			Token equals = previous();                                
+			Expr value = assignment();                                
+
+			if (expr instanceof Expr.Variable) {                      
+				Token name = ((Expr.Variable)expr).name;                
+				return new Expr.Assign(name, value);                    
+			}                                                         
+
+			error(equals, "Invalid assignment target."); 
+	    }                                                           
+
+	    return expr;                                                
+	}    
 	
 	// Corresponds to equality → comparison ( ( "!=" | "==" ) comparison )* 
 	// Leftmost comparison nonterminal is evaluated first, followed by the
@@ -180,60 +253,5 @@ class Parser {
 			
 			advance();
 		}
-	}
-	
-	List<Stmt> parse() {                
-	    List<Stmt> statements = new ArrayList<>();
-	    while (!isAtEnd()) {
-	    	statements.add(declaration());
-	    }
-	    
-	    return statements;
-	}         
-	
-	// If in the middle of parsing the next statement, the parser runs into an error, it will
-	// synchronize - that is, skip over successive tokens until it gets to a statement delimiter,
-	// usually a semicolon, but also a keyword that signifies the start of a new statement, such
-	// as class, if, return, etc. Nothing is returned for the statement on which parsing failed,
-	// and parsing continues on the next statement
-	private Stmt declaration() {
-		try {
-			if (match(VAR)) return varDeclaration();
-			
-			return statement();
-		} catch (ParseError error) {
-			synchronize();
-			return null;
-		}
-	}
-	
-	private Stmt varDeclaration() {
-		Token name = consume(IDENTIFIER, "Expect variable name.");
-		
-		Expr initializer = null;
-		if (match(EQUAL)) {
-			initializer = expression();
-		}
-		
-		consume(SEMICOLON, "Expect ';' after variable declaration.");
-		return new Stmt.Var(name, initializer);
-	}
-	
-	private Stmt statement() {
-		if (match(PRINT)) return printStatement();
-		
-		return expressionStatement();
-	}
-	
-	private Stmt printStatement() {
-		Expr expr = expression();
-		consume(SEMICOLON, "Expect ';' after expression.");
-		return new Stmt.Print(expr);
-	}
-	
-	private Stmt expressionStatement() {
-		Expr expr = expression();
-		consume(SEMICOLON, "Expect ';' after expression.");
-		return new Stmt.Expression(expr);
 	}
 }    
