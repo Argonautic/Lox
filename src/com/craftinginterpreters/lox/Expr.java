@@ -2,7 +2,7 @@
  * operations for these Expressions will be stored as external Visitor classes (like functions) instead
  * of as methods on these expressions. They will simply get access to the Expression's properties and
  * return some value.
- * 
+ *
  * This makes it harder to add new types because you have to add the corresponding visit method to each
  * existing Visitor, but it makes it easy to add new operations. This works well for this phase of the
  * interpreter.*/
