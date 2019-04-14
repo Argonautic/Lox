@@ -61,5 +61,10 @@ local.properties
 
 # End of https://www.gitignore.io/api/eclipse
 
-# Custom
+### Intellij ###
+.idea/
+
+### Custom ###
 *.class
+
+
