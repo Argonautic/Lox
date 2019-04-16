@@ -14,6 +14,7 @@ import java.util.List;
 import com.craftinginterpreters.lox.Expr.Binary;
 import com.craftinginterpreters.lox.Expr.Unary;
 import com.craftinginterpreters.lox.Expr.Literal;
+import com.sun.xml.internal.bind.v2.model.core.ID;
 
 import static com.craftinginterpreters.lox.TokenType.*;
 
@@ -22,6 +23,7 @@ class Parser {
 	
 	private final List<Token> tokens;
 	private int current = 0;
+	private final int max_args = 8;  // Can probably raise by a lot
 	
 	Parser(List<Token> tokens) {
 		this.tokens = tokens;
@@ -44,6 +46,7 @@ class Parser {
 	private Stmt declaration() {
 		try {
 			if (match(VAR)) return varDeclaration();
+			if (match(VAR)) return function("function");
 			
 			return statement();
 		} catch (ParseError error) {
@@ -152,6 +155,27 @@ class Parser {
 		Expr expr = expression();
 		consume(SEMICOLON, "Expect ';' after expression.");
 		return new Stmt.Expression(expr);
+	}
+
+	// Syntax for defining a function (vs call, which is syntax for calling a function)
+	private Stmt.Function function(String kind) {  // kind can be function or method
+		Token name = consume(IDENTIFIER, "Expect " + kind + " name.");
+		consume(LEFT_PAREN, "Expect '(' after " + kind + " name.");
+		List<Token> parameters = new ArrayList<>();
+
+		if (!check(RIGHT_PAREN)) {
+			do {
+				if (parameters.size() >= max_args) {
+					error(peek(), "Cannot have more than " + max_args + " parameters");
+				}
+
+				parameters.add(consume(IDENTIFIER, "Expect parameter name"));
+			} while (match(COMMA));
+		}
+		consume(RIGHT_PAREN, "Expect ')'after parameters.");
+		consume(LEFT_BRACE, "Expect { before " + kind + " body.");
+		List<Stmt> body = block();
+		return new Stmt.Function(name, parameters, body);
 	}
 
 	private List<Stmt> block() {
@@ -270,7 +294,37 @@ class Parser {
 			return new Expr.Unary(operator, right);
 		}
 		
-		return primary();
+		return call();
+	}
+
+	private Expr call() {
+		Expr expr = primary();  // Function identifier is a primary, found using the same logic as finding variables
+
+		while (true) {
+			if (match(LEFT_PAREN)) {
+				expr = finishCall(expr);
+			} else {
+				break;
+			}
+		}
+
+		return expr;
+	}
+
+	private Expr finishCall(Expr callee) {
+		List<Expr> arguments = new ArrayList<>();
+		if (!check(RIGHT_PAREN)) {
+			do {
+				if (arguments.size() >= max_args) {
+					error(peek(), "Cannot have more than " + max_args + " arguments");
+				}
+				arguments.add(expression());
+			} while (match(COMMA));
+		}
+
+		Token paren = consume(RIGHT_PAREN, "Expect ')'after arguments.");
+
+		return new Expr.Call(callee, paren, arguments);
 	}
 	
 	private Expr primary() {
