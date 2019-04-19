@@ -14,7 +14,6 @@ import java.util.List;
 import com.craftinginterpreters.lox.Expr.Binary;
 import com.craftinginterpreters.lox.Expr.Unary;
 import com.craftinginterpreters.lox.Expr.Literal;
-import com.sun.xml.internal.bind.v2.model.core.ID;
 
 import static com.craftinginterpreters.lox.TokenType.*;
 
@@ -46,7 +45,7 @@ class Parser {
 	private Stmt declaration() {
 		try {
 			if (match(VAR)) return varDeclaration();
-			if (match(VAR)) return function("function");
+			if (match(FUN)) return function("function");
 			
 			return statement();
 		} catch (ParseError error) {
@@ -80,6 +79,7 @@ class Parser {
 		if (match(FOR)) return forStatement();
 		if (match(IF)) return ifStatement();
 		if (match(PRINT)) return printStatement();
+		if (match(RETURN)) return returnStatement();
 		if (match(WHILE)) return whileStatement();
 		if (match(LEFT_BRACE)) return new Stmt.Block(block());
 		
@@ -149,6 +149,17 @@ class Parser {
 		Expr expr = expression();
 		consume(SEMICOLON, "Expect ';' after expression.");
 		return new Stmt.Print(expr);
+	}
+
+	private Stmt returnStatement() {
+		Token keyword = previous();
+		Expr value = null;
+		if (!check(SEMICOLON)) {  // Return can return a value or nothing at all;
+			value = expression();
+		}
+
+		consume(SEMICOLON, "Expect ';' after return value");
+		return new Stmt.Return(keyword, value);
 	}
 	
 	private Stmt expressionStatement() {
@@ -300,7 +311,7 @@ class Parser {
 	private Expr call() {
 		Expr expr = primary();  // Function identifier is a primary, found using the same logic as finding variables
 
-		while (true) {
+		while (true) {  // Can be any number of consecutive function calls
 			if (match(LEFT_PAREN)) {
 				expr = finishCall(expr);
 			} else {
