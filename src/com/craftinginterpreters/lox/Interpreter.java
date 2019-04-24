@@ -5,7 +5,7 @@ import java.util.List;
 
 class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Void> {
     final Environment globals = new Environment();  // fixed reference to global definitions
-    private Environment environment = globals;  // tracks current environment, which changes based ons cope
+    private Environment environment = globals;  // tracks current environment, which changes based on scope
 
     Interpreter() {
         globals.define("clock", new LoxCallable() {
@@ -183,6 +183,23 @@ class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Void> {
         return null;
     }
 
+    /*
+        Full flow for function declaration and calling is:
+        1. Parser detects function declaration based on "fun" keyword
+        2. Parser creates new syntax node that contains function name (Identifier Token), params (Identifier Tokens), and body (List of Stmts)
+        3. Parser detects any function calls based on the () postfix operator
+        4. Parser creates new syntax node that contains call callee (Variable Expr that matches func name), paren (Token for error reporting),
+           and arguments (List of Expr)
+        5. When interpreter finds function declaration, it creates a new LoxFunction object based on the function declaration
+        6. LoxFunction object is stored as a value in current environment, keyed by the function name
+        7. When interpreter finds function call, it finds the function in environment or environments above current environment based on
+           visitVariableExpr. If the function is not found, a RuntimeError is thrown
+        8. Arguments in call expression are then passed to LoxFunction call method. If arguments are invalid or of the wrong arity, Runtime Error is thrown
+        9. Result of call is returned by throwing a Return object that contains the return value. Closest LoxFunction call() catches thrown Return and
+           returns value. nil value is returned if no value is explicitly returned from function body
+       10. When declared, LoxFunction also takes a closure Environment object that captures active environment at time of declaration. This matters for locally
+           declares functions that need to hang on to locally defined variables that would other disappear upon the function resolving
+     */
     @Override
     public Object visitCallExpr(Expr.Call expr) {
         Object callee = evaluate(expr.callee);
@@ -204,6 +221,7 @@ class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Void> {
         return function.call(this, arguments);
     }
 
+    // visitVariableExpr will get both variable names and function names
     @Override
     public Object visitVariableExpr(Expr.Variable expr) {
         return environment.get(expr.name);

@@ -44,6 +44,8 @@ class Parser {
 	// and parsing continues on the next statement
 	private Stmt declaration() {
 		try {
+			// var and func declarations go here because declarations statements are only legal
+			// in a few places, and not (for example) in the middle of an expression
 			if (match(VAR)) return varDeclaration();
 			if (match(FUN)) return function("function");
 			
@@ -309,7 +311,7 @@ class Parser {
 	}
 
 	private Expr call() {
-		Expr expr = primary();  // Function identifier is a primary, found using the same logic as finding variables
+		Expr expr = primary();  // Function identifier is a primary, found using the same logic as finding variables. Saved as Expr.Variable node (which will be the callee of Expr.Call node)
 
 		while (true) {  // Can be any number of consecutive function calls
 			if (match(LEFT_PAREN)) {
