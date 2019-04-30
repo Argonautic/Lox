@@ -2,10 +2,13 @@ package com.craftinginterpreters.lox;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+import java.util.HashMap;
 
 class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Void> {
     final Environment globals = new Environment();  // fixed reference to global definitions
     private Environment environment = globals;  // tracks current environment, which changes based on scope
+    private final Map<Expr, Integer> locals = new HashMap<>();
 
     Interpreter() {
         globals.define("clock", new LoxCallable() {
@@ -34,6 +37,10 @@ class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Void> {
 
     private void execute(Stmt stmt) {
         stmt.accept(this);
+    }
+
+    void resolve(Expr expr, int depth) {
+        locals.put(expr, depth);
     }
 
     private String stringify(Object object) {
@@ -113,6 +120,14 @@ class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Void> {
     @Override
     public Object visitAssignExpr(Expr.Assign expr) {
         Object value = evaluate(expr.value);
+
+        // Assign the same static declaration of a variable
+        Integer distance = locals.get(expr);
+        if (distance != null) {
+            environment.assignAt(distance, expr.name, value);
+        } else {
+            globals.assign(expr.name, value);
+        }
 
         environment.assign(expr.name, value);
         return value;
@@ -224,7 +239,16 @@ class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Void> {
     // visitVariableExpr will get both variable names and function names
     @Override
     public Object visitVariableExpr(Expr.Variable expr) {
-        return environment.get(expr.name);
+        return lookUpVariable(expr.name, expr);
+    }
+
+    private Object lookUpVariable(Token name, Expr expr) {
+        Integer distance = locals.get(expr);
+        if (distance != null) {
+            return environment.getAt(distance, name.lexeme);
+        } else {
+            return globals.get(name);
+        }
     }
 
     private boolean isTruthy(Object object) {
