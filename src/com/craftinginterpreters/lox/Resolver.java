@@ -1,7 +1,5 @@
 package com.craftinginterpreters.lox;
 
-import com.sun.org.apache.xpath.internal.operations.Bool;
-
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -11,6 +9,10 @@ import java.util.Stack;
 // variable expressions and find their intended declaration, even if the variable is shadowed,
 // so that Lox is always statically scoped. Each var expression is resolved based on the number
 // of scopes between the expression and the declaration (referred to as "steps")
+
+// Compared to Parser, which does pure syntactical analysis, Resolver begins doing semantic analysis,
+// such as catching the use of returns in places they aren't semantically meant to be used
+
 class Resolver implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     private final Interpreter interpreter;
     // Used to help determine steps between expr and declaration.Each element in the stack represents
@@ -18,6 +20,13 @@ class Resolver implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     // dynamic. If we can't find a variable in the scopes stack, we assume it's global
     // Boolean value for scoped vars refers to whether or not the variable is finished initializing
     private final Stack<Map<String, Boolean>> scopes = new Stack<>();
+
+    // Used to catch invalid code like calling return out of a function
+    private FunctionType currentFunction = FunctionType.NONE;
+    private enum FunctionType {
+        NONE,
+        FUNCTION
+    }
 
     Resolver(Interpreter interpreter) {
         this.interpreter = interpreter;
@@ -49,6 +58,11 @@ class Resolver implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
         if (scopes.isEmpty()) return;
 
         Map<String, Boolean> scope = scopes.peek();
+
+        if (scope.containsKey(name.lexeme)) {  // Prevent intra block declaration shadowing
+            Lox.error(name, "Variable with this name already declared in this scope");
+        }
+
         scope.put(name.lexeme, false);
     }
 
@@ -66,18 +80,6 @@ class Resolver implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
                 return;
             }
         }
-    }
-
-    private void resolveFunction(Stmt.Function function) {
-        // bind params and locally declared variables in new function scope
-        beginScope();
-        for (Token param : function.params) {
-            declare(param);
-            define(param);
-        }
-
-        resolve(function.body);
-        endScope();
     }
 
     @Override
@@ -107,11 +109,28 @@ class Resolver implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
         declare(stmt.name);
         define(stmt.name);  // Eagerly defined to allow for recursion
 
-        resolveFunction(stmt);
+        resolveFunction(stmt, FunctionType.FUNCTION);
         return null;
     }
 
-    // For resolving a variale used in an expression, not for declaring a new one
+    private void resolveFunction(Stmt.Function function, FunctionType type) {
+        FunctionType enclosingFunction = currentFunction;  // Capture current state of being in a function or not
+        currentFunction = type;  // New state
+
+        // bind params and locally declared variables in new function scope
+        beginScope();
+        for (Token param : function.params) {
+            declare(param);
+            define(param);
+        }
+
+        resolve(function.body);
+        endScope();
+
+        currentFunction = enclosingFunction;  // Restore old state of being in a function or not
+    }
+
+    // For resolving a variable or function name used in an expression
     @Override
     public Void visitVariableExpr(Expr.Variable expr) {
         // A value in a scope map will be false after declaration but before initialization. Since Lox declarations
@@ -161,6 +180,10 @@ class Resolver implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
 
     @Override
     public Void visitReturnStmt(Stmt.Return stmt) {
+        if (currentFunction == FunctionType.NONE) {
+            Lox.error(stmt.keyword, "Cannot return from top level code.");
+        }
+
         if (stmt.value != null) {
             resolve(stmt.value);
         }
