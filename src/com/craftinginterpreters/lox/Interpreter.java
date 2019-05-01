@@ -39,6 +39,13 @@ class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Void> {
         stmt.accept(this);
     }
 
+    // Stores in locals the number of steps between where a variable is referenced and
+    // its actual declaration. At runtime, the interpreter will get the steps from locals
+    // using the expr object and get the a from the environment that is the specified number
+    // of steps away (expr objects referencing different variables with the same name are
+    // different objects)
+
+    // Keying by a whole ass Expr Object is bonkers!
     void resolve(Expr expr, int depth) {
         locals.put(expr, depth);
     }

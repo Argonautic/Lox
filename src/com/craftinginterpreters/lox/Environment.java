@@ -27,6 +27,7 @@ public class Environment {
 		ancestor(distance).values.put(name.lexeme, value);
 	}
 
+	// Get the environment "distance" steps away
 	Environment ancestor(int distance) {
 		Environment environment = this;
 		for (int i = 0; i < distance; i++) {  // Have to hop every time in a loop because environments are stored as a linked list

@@ -8,12 +8,14 @@ import java.util.Map;
 import java.util.Stack;
 
 // Resolver makes a pass at the code after parsing but before interpreting to resolve all
-// variable expressions, since variable expressions should be statically (lexically) scoped
+// variable expressions and find their intended declaration, even if the variable is shadowed,
+// so that Lox is always statically scoped. Each var expression is resolved based on the number
+// of scopes between the expression and the declaration (referred to as "steps")
 class Resolver implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     private final Interpreter interpreter;
-    // Each element in the stack represents a new block scope. Global scope isn't tracked by
-    // this stack because lox global scope is more dynamic. If we can't find a variable in
-    // the scopes stack, we assume it's global
+    // Used to help determine steps between expr and declaration.Each element in the stack represents
+    // a new block scope. Global scope isn't tracked by this stack because lox global scope is more
+    // dynamic. If we can't find a variable in the scopes stack, we assume it's global
     // Boolean value for scoped vars refers to whether or not the variable is finished initializing
     private final Stack<Map<String, Boolean>> scopes = new Stack<>();
 
@@ -50,6 +52,7 @@ class Resolver implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
         scope.put(name.lexeme, false);
     }
 
+    // define != reassign
     private void define(Token name) {
         if (scopes.isEmpty()) return;
         scopes.peek().put(name.lexeme, true);
@@ -85,9 +88,16 @@ class Resolver implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
         return null;
     }
 
+    // If a variable is referenced in its own initializer (e.g. from unintentional shadowing), we want to
+    // throw an error. Splitting declaration and definition allows us to check whether or not we're in the middle
+    // of an initializer when resolving a statement (check if the variable keyed value in the scoped stack is false)
     @Override
-    public Void visitExpressionStmt(Stmt.Expression stmt) {
-        resolve(stmt.expression);
+    public Void visitVarStmt(Stmt.Var stmt) {
+        declare(stmt.name);
+        if (stmt.initializer != null) {
+            resolve(stmt.initializer);
+        }
+        define(stmt.name);
         return null;
     }
 
@@ -101,11 +111,45 @@ class Resolver implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
         return null;
     }
 
+    // For resolving a variale used in an expression, not for declaring a new one
+    @Override
+    public Void visitVariableExpr(Expr.Variable expr) {
+        // A value in a scope map will be false after declaration but before initialization. Since Lox declarations
+        // have to be initialized (either explicitly or with nil), this will only happen if a user attempts to use a
+        // variable in its own initializer
+        if (!scopes.isEmpty() && scopes.peek().get(expr.name.lexeme) == Boolean.FALSE) {
+            Lox.error(expr.name, "Cannot read local variable in its own initializer");
+        }
+
+        resolveLocal(expr, expr.name);
+        return null;
+    }
+
+    @Override
+    public Void visitAssignExpr(Expr.Assign expr) {
+        resolve(expr.value);
+        resolveLocal(expr, expr.name);
+        return null;
+    }
+
+    @Override
+    public Void visitExpressionStmt(Stmt.Expression stmt) {
+        resolve(stmt.expression);
+        return null;
+    }
+
     @Override
     public Void visitIfStmt(Stmt.If stmt) {
         resolve(stmt.condition);
         resolve(stmt.thenBranch);
         if (stmt.elseBranch != null) resolve (stmt.elseBranch);
+        return null;
+    }
+
+    @Override
+    public Void visitWhileStmt(Stmt.While stmt) {
+        resolve(stmt.condition);
+        resolve(stmt.body);
         return null;
     }
 
@@ -120,33 +164,6 @@ class Resolver implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
         if (stmt.value != null) {
             resolve(stmt.value);
         }
-        return null;
-    }
-
-    // If a variable is referenced in its own initializer (e.g. from unintentional shadowing), we want to
-    // throw an error. Splitting declaration and definition allows us to check whether or not we're in the middle
-    // of an initializer when resolving a statement (check if the variable keyed value in the scoped stack is false)
-    @Override
-    public Void visitVarStmt(Stmt.Var stmt) {
-        declare(stmt.name);
-        if (stmt.initializer != null) {
-            resolve(stmt.initializer);
-        }
-        define(stmt.name);
-        return null;
-    }
-
-    @Override
-    public Void visitWhileStmt(Stmt.While stmt) {
-        resolve(stmt.condition);
-        resolve(stmt.body);
-        return null;
-    }
-
-    @Override
-    public Void visitAssignExpr(Expr.Assign expr) {
-        resolve(expr.value);
-        resolveLocal(expr, expr.name);
         return null;
     }
 
@@ -189,19 +206,6 @@ class Resolver implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     @Override
     public Void visitUnaryExpr(Expr.Unary expr) {
         resolve(expr.right);
-        return null;
-    }
-
-    @Override
-    public Void visitVariableExpr(Expr.Variable expr) {
-        // A value in a scope map will be false after declaration but before initialization. Since Lox declarations
-        // have to be initialized (either explicitly or with nil), this will only happen if a user attempts to use a
-        // variable in its own initializer
-        if (!scopes.isEmpty() && scopes.peek().get(expr.name.lexeme) == Boolean.FALSE) {
-            Lox.error(expr.name, "Cannot read local variable in its own initializer");
-        }
-
-        resolveLocal(expr, expr.name);
         return null;
     }
 }
