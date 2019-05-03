@@ -14,7 +14,7 @@ public class Environment {
 	Environment(Environment enclosing) {
 		this.enclosing = enclosing;
 	}
-	
+
 	void define(String name, Object value) {
 		values.put(name, value);
 	}
@@ -56,7 +56,9 @@ public class Environment {
 		// any function bodies are looked at)
 		throw new RuntimeError(name, "Undefined variable '" + name.lexeme + "'.");
 	}
-	
+
+	// compared to define, assign can look through enclosing environments to reassign a
+	// previously declared variable
 	void assign(Token name, Object value) {
 		if (values.containsKey(name.lexeme)) {
 			values.put(name.lexeme, value);

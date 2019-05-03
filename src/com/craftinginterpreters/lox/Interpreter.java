@@ -41,7 +41,7 @@ class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Void> {
 
     // Stores in locals the number of steps between where a variable is referenced and
     // its actual declaration. At runtime, the interpreter will get the steps from locals
-    // using the expr object and get the a from the environment that is the specified number
+    // using the expr object and get the var from the environment that is the specified number
     // of steps away (expr objects referencing different variables with the same name are
     // different objects)
 
@@ -111,6 +111,15 @@ class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Void> {
         }
 
         environment.define(stmt.name.lexeme, value);
+        return null;
+    }
+
+    @Override
+    public Void visitClassStmt(Stmt.Class stmt) {
+        // define and assign done in two stages to allow class methods to reference class and other class methods
+        environment.define(stmt.name.lexeme, null);
+        LoxClass klass = new LoxClass(stmt.name.lexeme);
+        environment.assign(stmt.name, klass);
         return null;
     }
 

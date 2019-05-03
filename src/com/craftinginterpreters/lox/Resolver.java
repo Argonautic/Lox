@@ -8,14 +8,15 @@ import java.util.Stack;
 // Resolver makes a pass at the code after parsing but before interpreting to resolve all
 // variable expressions and find their intended declaration, even if the variable is shadowed,
 // so that Lox is always statically scoped. Each var expression is resolved based on the number
-// of scopes between the expression and the declaration (referred to as "steps")
+// of scopes between the expression and the declaration (referred to as "steps"). Resolution
+// info is passed to Interpreter to be stored and used at runtime
 
 // Compared to Parser, which does pure syntactical analysis, Resolver begins doing semantic analysis,
 // such as catching the use of returns in places they aren't semantically meant to be used
 
 class Resolver implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     private final Interpreter interpreter;
-    // Used to help determine steps between expr and declaration.Each element in the stack represents
+    // Used to help determine steps between expr and declaration. Each element in the stack represents
     // a new block scope. Global scope isn't tracked by this stack because lox global scope is more
     // dynamic. If we can't find a variable in the scopes stack, we assume it's global
     // Boolean value for scoped vars refers to whether or not the variable is finished initializing
@@ -90,6 +91,7 @@ class Resolver implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
         return null;
     }
 
+
     // If a variable is referenced in its own initializer (e.g. from unintentional shadowing), we want to
     // throw an error. Splitting declaration and definition allows us to check whether or not we're in the middle
     // of an initializer when resolving a statement (check if the variable keyed value in the scoped stack is false)
@@ -99,6 +101,13 @@ class Resolver implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
         if (stmt.initializer != null) {
             resolve(stmt.initializer);
         }
+        define(stmt.name);
+        return null;
+    }
+
+    @Override
+    public Void visitClassStmt(Stmt.Class stmt) {
+        declare(stmt.name);
         define(stmt.name);
         return null;
     }
