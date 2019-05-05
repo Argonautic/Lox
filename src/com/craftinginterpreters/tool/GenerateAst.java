@@ -20,6 +20,7 @@ public class GenerateAst {
 			"Assign	  : Token name, Expr value",
 			"Binary   : Expr left, Token operator, Expr right",
 			"Call	  : Expr callee, Token paren, List<Expr> arguments",  // Token paren is stored so we have a location to report for a runtime error
+			"Get	  : Expr object, Token name",
 			"Grouping : Expr expression",                      
 			"Literal  : Object value",
 			"Logical  : Expr left, Token operator, Expr right",

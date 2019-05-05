@@ -328,9 +328,12 @@ class Parser {
 	private Expr call() {
 		Expr expr = primary();  // Function identifier is a primary, found using the same logic as finding variables. Saved as Expr.Variable node (which will be the callee of Expr.Call node)
 
-		while (true) {  // Can be any number of consecutive function calls
+		while (true) {  // Can be any number of consecutive function calls or property access
 			if (match(LEFT_PAREN)) {
 				expr = finishCall(expr);
+			} else if (match(DOT)) {
+				Token name = consume(IDENTIFIER, "Expect property name after '.'.");
+				expr = new Expr.Get(expr, name);  // Expr.Get can contain a method which then triggers the LEFT_PAREN match in the next iteration of this while loop
 			} else {
 				break;
 			}
