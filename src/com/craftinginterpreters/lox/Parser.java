@@ -44,8 +44,9 @@ class Parser {
 	// and parsing continues on the next statement
 	private Stmt declaration() {
 		try {
-			// var and func declarations go here because declarations statements are only legal
-			// in a few places, and not (for example) in the middle of an expression
+			// var, class, and func declarations go here because declarations statements are only legal
+			// in a few places, and not (for example) in the middle of an expression. Methods are parsed
+			// within classDeclaration()
 			if (match(VAR)) return varDeclaration();
 			if (match(CLASS)) return classDeclaration();
 			if (match(FUN)) return function("function");
