@@ -8,14 +8,15 @@ import java.util.Stack;
 // Resolver makes a pass at the code after parsing but before interpreting to resolve all
 // variable expressions and find their intended declaration, even if the variable is shadowed,
 // so that Lox is always statically scoped. Each var expression is resolved based on the number
-// of scopes between the expression and the declaration (referred to as "steps")
+// of scopes between the expression and the declaration (referred to as "steps"). Resolution
+// info is passed to Interpreter to be stored and used at runtime
 
 // Compared to Parser, which does pure syntactical analysis, Resolver begins doing semantic analysis,
 // such as catching the use of returns in places they aren't semantically meant to be used
 
 class Resolver implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     private final Interpreter interpreter;
-    // Used to help determine steps between expr and declaration.Each element in the stack represents
+    // Used to help determine steps between expr and declaration. Each element in the stack represents
     // a new block scope. Global scope isn't tracked by this stack because lox global scope is more
     // dynamic. If we can't find a variable in the scopes stack, we assume it's global
     // Boolean value for scoped vars refers to whether or not the variable is finished initializing
@@ -25,8 +26,17 @@ class Resolver implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     private FunctionType currentFunction = FunctionType.NONE;
     private enum FunctionType {
         NONE,
-        FUNCTION
+        FUNCTION,
+        INITIALIZER,
+        METHOD
     }
+
+    // Check if you're inside a class to detect improper use of "this" (among other bugs)
+    private enum ClassType {
+        NONE,
+        CLASS
+    }
+    private ClassType currentClass = ClassType.NONE;
 
     Resolver(Interpreter interpreter) {
         this.interpreter = interpreter;
@@ -90,6 +100,7 @@ class Resolver implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
         return null;
     }
 
+
     // If a variable is referenced in its own initializer (e.g. from unintentional shadowing), we want to
     // throw an error. Splitting declaration and definition allows us to check whether or not we're in the middle
     // of an initializer when resolving a statement (check if the variable keyed value in the scoped stack is false)
@@ -100,6 +111,30 @@ class Resolver implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
             resolve(stmt.initializer);
         }
         define(stmt.name);
+        return null;
+    }
+
+    @Override
+    public Void visitClassStmt(Stmt.Class stmt) {
+        ClassType enclosingClass = currentClass;
+        currentClass = ClassType.CLASS;
+
+        declare(stmt.name);
+        define(stmt.name);
+
+        beginScope();
+        scopes.peek().put("this", true);
+
+        for (Stmt.Function method : stmt.methods) {
+            FunctionType declaration = FunctionType.METHOD;
+            if (method.name.lexeme.equals("init")) {
+                declaration = FunctionType.INITIALIZER;
+            }
+            resolveFunction(method, declaration);
+        }
+
+        endScope();
+        currentClass = enclosingClass;
         return null;
     }
 
@@ -185,6 +220,9 @@ class Resolver implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
         }
 
         if (stmt.value != null) {
+            if (currentFunction == FunctionType.INITIALIZER) {
+                Lox.error(stmt.keyword, "Cannot return a value from an initializer.");
+            }
             resolve(stmt.value);
         }
         return null;
@@ -209,6 +247,12 @@ class Resolver implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     }
 
     @Override
+    public Void visitGetExpr(Expr.Get expr) {
+        resolve(expr.object);  // defaults to visitVariableExpr for the callee, but doesn't try to resolve the actual property (stored in expr.name) since those are resolved dynamically
+        return null;
+    }
+
+    @Override
     public Void visitGroupingExpr(Expr.Grouping expr) {
         resolve(expr.expression);
         return null;
@@ -223,6 +267,25 @@ class Resolver implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     public Void visitLogicalExpr(Expr.Logical expr) {
         resolve(expr.left);
         resolve(expr.right);
+        return null;
+    }
+
+    // same as visitGetExpr, only resolves the instance instead of the field because those are resolved dynamically
+    @Override
+    public Void visitSetExpr(Expr.Set expr) {
+        resolve(expr.value);
+        resolve(expr.object);
+        return null;
+    }
+
+    @Override
+    public Void visitThisExpr(Expr.This expr) {
+        if (currentClass == ClassType.NONE) {
+            Lox.error(expr.keyword, "Cannot use 'this' outside of a class");
+            return null;
+        }
+
+        resolveLocal(expr, expr.keyword);
         return null;
     }
 

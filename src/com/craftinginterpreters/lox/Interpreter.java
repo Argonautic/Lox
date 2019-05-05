@@ -41,7 +41,7 @@ class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Void> {
 
     // Stores in locals the number of steps between where a variable is referenced and
     // its actual declaration. At runtime, the interpreter will get the steps from locals
-    // using the expr object and get the a from the environment that is the specified number
+    // using the expr object and get the var from the environment that is the specified number
     // of steps away (expr objects referencing different variables with the same name are
     // different objects)
 
@@ -73,7 +73,7 @@ class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Void> {
 
     @Override
     public Void visitFunctionStmt(Stmt.Function stmt) {
-        LoxFunction function = new LoxFunction(stmt, environment);
+        LoxFunction function = new LoxFunction(stmt, environment, false);
         environment.define(stmt.name.lexeme, function);
         return null;
     }
@@ -111,6 +111,22 @@ class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Void> {
         }
 
         environment.define(stmt.name.lexeme, value);
+        return null;
+    }
+
+    @Override
+    public Void visitClassStmt(Stmt.Class stmt) {
+        // define and assign done in two stages to allow class methods to reference class and other class methods
+        environment.define(stmt.name.lexeme, null);
+
+        Map<String, LoxFunction> methods = new HashMap<>();
+        for (Stmt.Function method : stmt.methods) {
+            LoxFunction function = new LoxFunction(method, environment, method.name.lexeme.equals("init"));
+            methods.put(method.name.lexeme, function);
+        }
+
+        LoxClass klass = new LoxClass(stmt.name.lexeme, methods);
+        environment.assign(stmt.name, klass);
         return null;
     }
 
@@ -181,6 +197,24 @@ class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Void> {
     }
 
     @Override
+    public Object visitSetExpr(Expr.Set expr) {
+        Object object = evaluate(expr.object);
+
+        if (!(object instanceof LoxInstance)) {
+            throw new RuntimeError(expr.name, "Only instances have fields.");
+        }
+
+        Object value = evaluate(expr.value);
+        ((LoxInstance)object).set(expr.name, value);
+        return value;
+    }
+
+    @Override
+    public Object visitThisExpr(Expr.This expr) {
+        return lookUpVariable(expr.keyword, expr);
+    }
+
+    @Override
     public Object visitGroupingExpr(Expr.Grouping expr) {
         return evaluate(expr.expression);
     }
@@ -243,12 +277,24 @@ class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Void> {
         return function.call(this, arguments);
     }
 
+    @Override
+    public Object visitGetExpr(Expr.Get expr) {
+        Object object = evaluate(expr.object);
+        if (object instanceof LoxInstance) {
+            return ((LoxInstance) object).get(expr.name);
+        }
+
+        throw new RuntimeError(expr.name, "Only instances have properties");
+    }
+
     // visitVariableExpr will get both variable names and function names
     @Override
     public Object visitVariableExpr(Expr.Variable expr) {
         return lookUpVariable(expr.name, expr);
     }
 
+    // Using the distance value in "locals" keyed by expr, get the variable "distance" jumps away with the
+    // identifier "name"
     private Object lookUpVariable(Token name, Expr expr) {
         Integer distance = locals.get(expr);
         if (distance != null) {
