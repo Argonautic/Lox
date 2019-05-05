@@ -19,7 +19,7 @@ class LoxInstance {
         }
 
         LoxFunction method = klass.findMethod(name.lexeme);
-        if (method != null) return method;
+        if (method != null) return method.bind(this);
 
         // Piss off, javascript
         throw new RuntimeError(name, "Undefined property '" + name.lexeme + "'.");
@@ -28,6 +28,31 @@ class LoxInstance {
     void set(Token name, Object value) {
         fields.put(name.lexeme, value);
     }
+
+    /*
+        Lox uses bound methods, which means that when methods are called, they refer to the instance they
+        were *drawn* from. Normally, since methods are drawn (using '.') at the same time they're called
+        (using '()'), the distinction is moot. However, it does matter for situations like:
+
+        ```
+            class Foo {
+                myMethod() {
+                    print this.bar;
+                }
+            }
+
+            var instOne = Foo();
+            instOne.bar = 10;
+
+            var instTwo = Foo();
+            instTwo.bar = 15
+
+            instTwo.myMethod = instOne.myMethod
+            instTwo.myMethod()  // This *should* print out 10, because this myMethod was drawn from instOne
+        ```
+
+        Within methods, the keyword "this" will always refer to the instance the method was drawn from as well
+     */
 
     @Override
     public String toString() {
