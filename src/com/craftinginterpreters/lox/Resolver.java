@@ -241,6 +241,14 @@ class Resolver implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
         return null;
     }
 
+    // same as visitGetExpr, only resolves the instance instead of the field because those are resolved dynamically
+    @Override
+    public Void visitSetExpr(Expr.Set expr) {
+        resolve(expr.value);
+        resolve(expr.object);
+        return null;
+    }
+
     @Override
     public Void visitUnaryExpr(Expr.Unary expr) {
         resolve(expr.right);

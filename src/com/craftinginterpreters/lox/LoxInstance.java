@@ -11,6 +11,8 @@ class LoxInstance {
         this.klass = klass;
     }
 
+    // LoxInstance getting and setting can be done dynamically because the resolver ensures
+    // you'll always get the intended instance every time you refer to an instance name
     Object get(Token name) {
         if (fields.containsKey(name.lexeme)) {
             return fields.get(name.lexeme);
@@ -18,6 +20,10 @@ class LoxInstance {
 
         // Piss off, javascript
         throw new RuntimeError(name, "Undefined property '" + name.lexeme + "'.");
+    }
+
+    void set(Token name, Object value) {
+        fields.put(name.lexeme, value);
     }
 
     @Override
